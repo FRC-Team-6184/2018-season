@@ -1,152 +1,319 @@
 package org.usfirst.frc.team6184.robot;
-import edu.wpi.first.wpilibj.SampleRobot;
-import edu.wpi.first.wpilibj.Solenoid;
-import edu.wpi.first.wpilibj.Talon;
-import edu.wpi.first.wpilibj.RobotDrive;
+
+import org.opencv.core.Core;
+
+import org.opencv.core.Mat;
+
+import org.opencv.core.Point;
+
+import org.opencv.core.Scalar;
+
+import org.opencv.imgproc.Imgproc;
+
 import edu.wpi.first.wpilibj.AnalogInput;
-import edu.wpi.first.wpilibj.DigitalOutput;
-import edu.wpi.first.wpilibj.Joystick;
-import edu.wpi.first.wpilibj.Timer;
-import edu.wpi.first.wpilibj.SampleRobot;
-import edu.wpi.first.wpilibj.Solenoid;
-import edu.wpi.first.wpilibj.Victor;
-import edu.wpi.first.wpilibj.RobotDrive;
-import edu.wpi.first.wpilibj.AnalogInput;
-import edu.wpi.first.wpilibj.DigitalOutput;
-import edu.wpi.first.wpilibj.DoubleSolenoid;
-import edu.wpi.first.wpilibj.Joystick;
-import edu.wpi.first.wpilibj.Ultrasonic;
-import edu.wpi.first.wpilibj.Timer;
-import edu.wpi.first.wpilibj.hal.FRCNetComm.tResourceType;
-import edu.wpi.first.wpilibj.hal.HAL;
-import edu.wpi.first.wpilibj.livewindow.LiveWindow;
-//import edu.wpi.first.wpilibj.SendableBase;
-import edu.wpi.first.wpilibj.PWM;
-import edu.wpi.first.wpilibj.SafePWM;
-import edu.wpi.first.wpilibj.PWMSpeedController;
-import edu.wpi.first.wpilibj.Spark;
+
+import edu.wpi.cscore.CvSink;
+
+import edu.wpi.cscore.CvSource;
+
+import edu.wpi.cscore.UsbCamera;
+
+import edu.wpi.first.wpilibj.Compressor;
+
 import edu.wpi.first.wpilibj.CameraServer;
-import edu.wpi.first.wpilibj.command.PIDSubsystem;
-public class Robot extends SampleRobot {
-    Joystick stick = new Joystick(0);// set to ID 0 in DriverStation(Drive Movement)
-    Joystick stick2= new Joystick(1); // set ID to 1 in DriverStation(Everything Else)
-    private RobotDrive drivetrain;   
-    // Declare our motor controllers using their PWM ports from RoboRIO
-    Victor mR = new Victor(0), mL = new Victor(1), tilt_shooter = new Victor(2), rotate_shooter = new Victor(3);
-    DoubleSolenoid exampleDouble = new DoubleSolenoid(0, 1);
-    Timer timer = new Timer();
-   //mechanum arraylist
-    // RobotDrive m_robotDrive = new RobotDrive(1, 2, 3, 4);
-     AnalogInput ultraSonic = new AnalogInput(0); //Assumes 0 for the Analog
-    // Input on RoboRIO
-     final double ultraInputVoltage = 5.0f; //What's the voltage input for
-    // HRLV-MaxSonar-EZ1 relative to Pin 7 (GND)
-     final double ultraScaling = ultraInputVoltage/5120; //(about 0.977mV per
-    //1mm at 5V input voltage) Scaling specs for HRLV-MaxSonar-EZ1
-     DigitalOutput ultraOut = new DigitalOutput(0); 
-    // Pass 0 as the port number of the Pnemuatic Controller in the Control Area Network (CAN) 
-    // and also we are inherently assuming a default Node ID of 0
-    //Solenoid tshirtSolenoid = new Solenoid(0);
-    // Initialize things in the class constructor
-     
-     public Robot() {
-    	 CameraServer.getInstance().startAutomaticCapture(); }
+
+import edu.wpi.first.wpilibj.IterativeRobot;
+
+import edu.wpi.first.wpilibj.Joystick;
+
+import edu.wpi.first.wpilibj.Spark;
+
+import edu.wpi.first.wpilibj.drive.DifferentialDrive;
+
+import edu.wpi.first.wpilibj.Talon;
+import edu.wpi.first.wpilibj.Timer;
+import edu.wpi.first.wpilibj.Victor;
+
+import edu.wpi.first.wpilibj.DoubleSolenoid;
+import edu.wpi.first.wpilibj.DriverStation;
+import edu.wpi.first.wpilibj.DigitalInput;
+
+/** 
+
+ * This is a 2018 raw code made to upload in class
+
+ */
+
+public class Robot extends IterativeRobot {
+
+    private Joystick m_leftStick;
+
+    private Joystick m_rightStick;
+
+    DoubleSolenoid exampleDouble = new DoubleSolenoid(0, 1);    
+
+    Compressor c = new Compressor();
+
+    Talon lift = new Talon(3);
+
+    Thread m_visionThread;
+
+    Spark grabber = new Spark(2);
+
+    DigitalInput topLimitSwitch = new DigitalInput(8);
+
+    DigitalInput botLimitSwitch = new DigitalInput(9);
+
+    final double BUFFER = 0.05;
+   // private static final int kUltrasonicPort = 0;
+
+   // private AnalogInput m_ultrasonic = new AnalogInput(kUltrasonicPort);
+
+  //  private static final double kValueToInches = 0.125;
+
+    Spark mR = new Spark(0), mL = new Spark(1);
+
     
-    // This will run when the robot is in TeleOp mode
+
     @Override
-    public void operatorControl() {
-        while (isOperatorControl() && isEnabled()) {
-             ultraOut.set(true);
-             System.out.println(getDistanceUltra()); //Print distance in mm
-             // mechanum controll
-           //  m_robotDrive.mecanumDrive_Cartesian(stick.getX(), stick.getY(), stick.getTwist(),0);
-       
-        
+
     
-             
-           // Drive the robot using the 2 drive-train motors
-            double m;
-            if (stick.getRawButton(3))
-                m = 1; // Boost power
-            else
-                m = .7;
-            double y = stick.getY(); // How much "y"
-            double z = stick.getZ(); // How much "z"
-            if (y > .1 || y <= -.1) {
-                mR.setSpeed(-y * m);
-                mL.setSpeed(y * m);
-            } else if (z > .1 || z <= -.1) {
-                mR.setSpeed(z*m);
-                mL.setSpeed(z*m);
-            } else {
-                mR.setSpeed(0);
-                mL.setSpeed(0);
-          }
-    // This will run when robot is in autonomous mode
-    //@Override
-    //public void autonomous()
-            
-            // Rotate the tshirt cannon using buttons 3 and 4
-                //Controls the solenoid valves via button inputs 11 and 12
-                boolean clicked11 = stick2.getRawButton(8);
-                boolean clicked12 = stick2.getRawButton(7);
-                 if (clicked11){
-                    exampleDouble.set(DoubleSolenoid.Value.kForward);
-                 }
-                 else if (!clicked11 && clicked12){
-                    exampleDouble.set(DoubleSolenoid.Value.kReverse);
-                 }
-                 else               
-                    exampleDouble.set(DoubleSolenoid.Value.kOff);
-  
-                 // Rotate the tshirt cannon using buttons 3 and 4
-                 boolean isclickedright = stick2.getRawButton(3);
-                 boolean isclickedleft = stick2.getRawButton(4);
-                 if (isclickedright){
-                     rotate_shooter.setSpeed(.3);
-                 }
-                 else if (!isclickedright && isclickedleft){
-                     rotate_shooter.setSpeed(-.3);
-                 }
-                    else rotate_shooter.setSpeed(0);
-                }
-              // Use the little lever on joystick to control tilt
-                tilt_shooter.setSpeed(stick2.getX());
-                  }
-    public void stop() {
-        mR.setSpeed(0);
-        mL.setSpeed(0);
+
+    public void robotInit() {
+
+      
+
+   
+
+        m_leftStick = new Joystick(0);
+
+        m_rightStick = new Joystick(1);
+
+        
+
+      CameraServer.getInstance().startAutomaticCapture();
+
+        
+//
+//        new Thread(() -> {
+//
+//            UsbCamera camera = CameraServer.getInstance().startAutomaticCapture();
+//
+//            camera.setResolution(640, 480);
+//
+//            
+//
+//            CvSink cvSink = CameraServer.getInstance().getVideo();
+//
+//            CvSource outputStream = CameraServer.getInstance().putVideo("Blur", 640, 480);
+//
+//            
+//
+//            Mat source = new Mat();
+//
+//            Mat output = new Mat();
+//
+//            
+//
+//            while(!Thread.interrupted()) {
+//
+//                cvSink.grabFrame(source);
+//
+//                output = source;
+//
+////                Core.`
+//
+////                Imgproc.circle(output, new Point(300,300), 5, new Scalar(255,0,0));
+//
+////                Highgui.imshow("test", output);
+//
+////                Imgproc.cvtColor(source, output, Imgproc.COLOR_BGR2GRAY);
+//
+//                outputStream.putFrame(output);
+//
+////                System.out.println("YES WE ARE PUTTING BLUR IMAGE TO FEED");
+//
+//            }
+//
+//        }).start();
+      c.setClosedLoopControl(true);
     }
-    public void autoDriveForward() {
-        System.out.println("Driving Backwards");
-        double m_speed = .7;
-        mR.setSpeed(-0.5 * m_speed);
-        mL.setSpeed(0.5 * m_speed);
-        timer.delay(7.3);
-        System.out.println("Stopping");
-        stop();
-}
-           // Open the solenoid if button 5 is clicked
-      //     if(stick.getRawButton(5)) tshirtSolenoid.set(true);
-        //   else tshirtSolenoid.set(false);
-        
+    
     @Override
-    public void autonomous() {
-        System.out.println("Doing Autonomous");
-//      autoShoot(1); // Postive is for blue side, negative is for red
-        // side
-    //  autoDriveForward();
-//      autoGear();
-        System.out.println("Done with autonomous");}
-        // Uses Ultrasonic sensor to find distance in mm
-         private double getDistanceUltra() {
-         double volts = ultraSonic.getVoltage();
-         ultraOut.set(false);
-     return volts/ultraScaling;
-}
-            
+
+    public void teleopPeriodic() {
+
+           double m;
+
+           if (m_leftStick.getRawButton(3))
+
+               m = 0.6; // Boost power
+
+           else
+
+               m = .6;
+
+           double y = m_leftStick.getY(); // How much "y"
+
+           double z = m_leftStick.getZ(); // How much "z"
+
+           if (y > BUFFER || y <= -BUFFER) {
+
+               mR.setSpeed(-y * m);
+
+               mL.setSpeed(y * m);
+
+           } else if (z > BUFFER || z <= -BUFFER) {
+
+               mR.setSpeed(z*m);
+
+               mL.setSpeed(z*m);
+
+           } else {
+
+               mR.setSpeed(0);
+
+               mL.setSpeed(0);
+
+    }
+
+        boolean clicked1 = m_rightStick.getRawButton(1);
+        boolean clicked2= m_rightStick.getRawButton(2);
+        boolean clicked8 = m_rightStick.getRawButton(8);
+            boolean clicked7 = m_rightStick.getRawButton(7);
+            boolean clicked9 = m_rightStick.getRawButton(9);
+            boolean clicked6 = m_rightStick.getRawButton(6);
+            boolean clicked11 = m_rightStick.getRawButton(11);
+            boolean clicked12= m_rightStick.getRawButton(12);
+     
+
+        if (clicked7){
+            exampleDouble.set(DoubleSolenoid.Value.kForward);
+         }
+         else if (!clicked7 && clicked8){
+            exampleDouble.set(DoubleSolenoid.Value.kReverse);
+         }
+         else           {    
+            exampleDouble.set(DoubleSolenoid.Value.kOff);
+         }
+        
    
-   
+        
+        if (clicked1) {
+            grabber.set(-0.7);
+        }
+        else if (!clicked1 && clicked2){
+            grabber.set(0.7);
+        }
+        else { 
+            grabber.set(0.0);}
+        
+        //ultra cool sonic
+//        double currentDistance = m_ultrasonic.getValue() * kValueToInches;
+//        System.out.println(currentDistance);
+        
+       
+//        if (clicked12) {
+//            lift.set(-0.7);
+//        }
+//        else if (!clicked12 && clicked11){
+//            lift.set(0.7);
+//        }
+//        else { 
+//            lift.set(0.0);}
+//    	}
+        
+        
+        
+        if (topLimitSwitch.get() && clicked12)
+           lift.set(-0.7);
+        else if (botLimitSwitch.get() && clicked11) 
+            lift.set(0.7);
+        else{ lift.set(0); // set accepts between [-1, 1]. But now, it will only recieve [-0.2, 0.2]
+    	}}
+        
+    public void autoGrab(){
+    	grabber.set(.7);
+    	grabber.set(-.7);
+    }
     
+    String gameData;{
+        gameData =
+        		DriverStation.getInstance().getGameSpecificMessage();
+        if(gameData.length()>0)
+        {
+        if(gameData.charAt(0)=='L')
+       	{
+        	//Put left auto code here
+        }else{
+        	//Put right auto code here 
+        }
+        }
+        }
     
-}
+    public void autoDRPGRB(){
+    	grabber.set(0.0);
+    }
+    
+    public void autoDrive(){
+    	double m_speed = .8;
+        double t_speed = .5;
+        double m2_speed = .6;
+    	double l_speed = .25;
+    	
+    	System.out.println("I'm Gonna Go Forward");
+    	mR.setSpeed(.5*m_speed);
+        mL.setSpeed(-.675*m_speed);
+    	Timer.delay (3);
+    
+    	System.out.println("I'm Gonna Turn Now");
+    	mL.setSpeed(.5*t_speed);
+    	Timer.delay(1);
+    	
+    	System.out.println("I'm Going Forward Again");
+    	mR.setSpeed(.5*m2_speed);
+    	mL.setSpeed(-.5*m2_speed);
+    	Timer.delay(3);
+    	
+    	System.out.println("I'm turning one more time!");
+    	mR.setSpeed(.3*t_speed);
+    	Timer.delay(1);
+    	
+    	System.out.println("Can I stop going forward please");
+    	mR.setSpeed(.5*m_speed);
+    	mL.setSpeed(-.5*m_speed);
+    	Timer.delay(.5);
+    	
+    	System.out.println("Going Up!");
+    	lift.set(-.2*l_speed);
+    	lift.set(.2*l_speed);
+    	
+    	System.out.println("I'm bored. Can someone control me?"); 
+    }
+
+    @Override
+    public void autonomousInit() {
+    	System.out.println("I'm gonna run in autonomous");
+    	//double s_speed = (1.2);
+    	
+    	autoGrab();
+    	autoDrive();
+    	Timer.delay(2);
+    	
+    	autoDRPGRB();
+    	
+    	System.out.println("I thinnk I'm done");
+    	Timer.delay(2);
+    	//mR.setSpeed (1*s_speed);
+        //System.out.println("WOOOOOOOOOOOOOOOOOOOOOO");
+    	Timer.delay(4);
+    	System.out.println("So is someone gonna control me or what?");
+    }
+
+    public void autonomousPeriodic(){
+	}
+	
+	@Override
+	public void disabledInit(){
+	}
+	}
